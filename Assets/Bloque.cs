@@ -20,19 +20,33 @@ public class Bloque : MonoBehaviour
 
     private int cooldown;
 
-    private float life = 100.0f;
+    [SerializeField]
+    //private float life = 100.0f;
+    private GameObject spawnPoint;
 
-    private Vector3 spawnPoint;
+    public float speed = 100.0f;
+
+    public float shortDistance = 200f;
+    public float longDistance = 300f;
+
+    public GameObject bulletObj;
+
+    private UnityEngine.AI.NavMeshAgent agent;
 
     // Start is called before the first frame update
     void Start()
     {
+        agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         
+        myState = State.DEFEND;
     }
 
     // Update is called once per frame
     void Update()
     {
+        if (myState == State.DEFEND || myState == State.SEARCH){
+            Move();
+        }
         lastDecision += Time.deltaTime;
         lastTimePlayerSeen += Time.deltaTime;
         if (lastDecision >= 1.0){
@@ -41,8 +55,8 @@ public class Bloque : MonoBehaviour
         }
     }
 
-    bool Raycast (float distance) {
-        Vector3 forwardVector = transform.TransformDirection(Vector3.forward);
+    bool Raycast (float distance, Vector3 direction) {
+        Vector3 forwardVector = transform.TransformDirection(direction);
         RaycastHit choque = new RaycastHit();
         
         if (Physics.Raycast(transform.position, forwardVector, out choque, distance)){
@@ -58,19 +72,34 @@ public class Bloque : MonoBehaviour
         }
     }
 
+    bool Raycast(float distance){
+        bool found = false;
+        Vector3 [] vectores = new Vector3 [4];
+        vectores[0] = Vector3.forward;
+        vectores[1] = Vector3.left;
+        vectores[2] = Vector3.back;
+        vectores[3] = Vector3.right;
+        for (int i = 0; i < 4; i++){
+            found = found || Raycast(distance, vectores[i]);
+        }
+        return found;
+    }
+
     void Decision () {
         /*
         CHANGE STATES ACCORDING TO STATE MACHINE
         */
         switch (myState){
             case State.DEFEND:
-                if (life < 50 && Raycast(300f)){
+                //When defending, don't move away from tower. Wait the player to approach block
+                if (gameObject.GetComponent<Life>().life < 50 && Raycast(longDistance)){
                     this.myState = State.FREEZE;
-                } else if (Raycast(300f)){
+                } else if (Raycast(longDistance)){
                     this.myState = State.SHOOT;
                 }
             break;
             case State.FREEZE:
+                //Shoot a freeze shot has a cooldown of 5 seconds. Then proceed to defend
                 if (cooldown < 5){
                     cooldown++;
                 } else {
@@ -79,16 +108,19 @@ public class Bloque : MonoBehaviour
                 }
             break;
             case State.SHOOT:
-                if (!Raycast(200f)){
+                //When Block shoots normal, continue shooting until you can't see the player
+                //Then, search it
+                if (!Raycast(shortDistance)){
                     this.myState = State.SEARCH;
                 }
             break;
             case State.SEARCH:
+                //Search the player for a maximum of 5 seconds and shoot. If not found, defend Tower
                 if (cooldown >= 5){
                     cooldown = 0;
                     this.myState = State.DEFEND;
                 } else {
-                    if (Raycast(200)){
+                    if (Raycast(shortDistance)){
                         this.myState = State.SHOOT;
                         cooldown = 0;
                     } else {
@@ -104,20 +136,45 @@ public class Bloque : MonoBehaviour
 
         switch (myState){
             case State.DEFEND:
-                target = spawnPoint;
+                target = spawnPoint.transform.position;
                 Move();
             break;
             case State.SHOOT:
-                Shoot();
+                //Shoot();
             break;
             case State.SEARCH:
                 Move();
             break;
             case State.FREEZE:
-                ShootFreeze();
+                //ShootFreeze();
             break;
         }
 
 
+    }
+
+    void Move() {
+        //transform.position = Vector3.MoveTowards(transform.position, target, step);
+        agent.SetDestination(target);
+        agent.speed = speed;
+    }
+
+    void Shoot () {
+        genericShoot();
+        agent.SetDestination(transform.position);
+    }
+
+    void ShootFreeze (){
+        genericShoot();
+        bulletObj.GetComponent<Bullet>().freeze = true;
+        agent.SetDestination(transform.position);
+        Debug.Log("Shooteando congelasio");
+    }
+
+    void genericShoot(){
+        Vector3 direct = target - transform.position;
+        Debug.Log("Die! Die! Dieeee!");
+        Instantiate(bulletObj, transform.position + new Vector3(0,0,-4), transform.rotation);
+        bulletObj.GetComponent<Bullet>().direction = direct;
     }
 }

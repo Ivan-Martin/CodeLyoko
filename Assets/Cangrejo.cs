@@ -16,16 +16,13 @@ public class Cangrejo : MonoBehaviour
     [SerializeField]
     private float lastTimePlayerSeen;
     //Time between this frame and last time the krab has seen the player
-
-    [SerializeField]
-    private float life;
     //life of this krab
 
     [SerializeField]
     private int nearBugs;
 
     [SerializeField]
-    private GameObject bulletObj;
+    public GameObject bulletObj;
 
     private enum Action {
         SEARCH, SHOOT, BACK, WAIT
@@ -35,19 +32,34 @@ public class Cangrejo : MonoBehaviour
 
     private float lastDecision = 0.0f; //time between the last decision was taken and now
 
+    private bool search = false;
+
+    private float RotationSpeed = 10;
+
+    private bool rightBool = false;
+
+    private Vector3 to = new Vector3 (0,180,0);
+
+     private UnityEngine.AI.NavMeshAgent agent;
+
+     private float speed = 100.0f;
+
     // Start is called before the first frame update
     void Start()
     {
         playerTransform = GameObject.FindGameObjectWithTag("Player").transform;
-        life = 100.0f;
         nearBugs = 0;
         lastTimePlayerSeen = 5.0f;
         playerSeen = false;
+        agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
     }
 
     // Update is called once per frame
     void Update()
     {
+        if (search) {
+             Rotate();
+        }
         lastDecision += Time.deltaTime;
         lastTimePlayerSeen += Time.deltaTime;
         if (lastDecision >= 1.0){
@@ -62,8 +74,13 @@ public class Cangrejo : MonoBehaviour
         RaycastHit choque = new RaycastHit();
         
         if (Physics.Raycast(transform.position, forwardVector, out choque, 200f)){
-            Debug.DrawRay(transform.position, forwardVector * choque.distance, Color.red);
-            return (choque.collider.gameObject.tag == "Player");
+            Debug.DrawRay(transform.position, forwardVector * choque.distance, Color.red, 1.0f);
+            if((choque.collider.gameObject.tag == "Player")){
+                target = choque.collider.gameObject.transform.position;
+                return true;
+            } else {
+                return false;
+            }
         } else {
             return false;
         }
@@ -92,6 +109,7 @@ public class Cangrejo : MonoBehaviour
             - Actively search the player (SEARCH)
             - Wait for the player or for bugs (WAIT)
         */
+        float life = gameObject.GetComponent<Life>().life;
         if (lastTimePlayerSeen > 5.0f && nearBugs >= 3){
             nextAction = Action.SEARCH;
         } else if (lastTimePlayerSeen > 5.0f && nearBugs < 3){
@@ -116,39 +134,62 @@ public class Cangrejo : MonoBehaviour
 
         switch (nextAction){
             case Action.WAIT:
-                Debug.Log("waiting");
                 //Do nothing
+                search = true;
             break;
             case Action.SHOOT:
+                search = false;
                 Shoot();
             break;
             case Action.BACK:
+                search = false;
                 Back();
             break;
             case Action.SEARCH:
+                search = true;
                 Search();
             break;
         }
     }
 
     void Shoot () {
-        RaycastHit hit;
-
         Vector3 direct = target - transform.position;
-        if(Physics.Raycast(transform.position, direct,out hit,100f)){
-
-        }
-        
         Debug.Log("Die! Die! Dieeee!");
-        Instantiate(bulletObj, transform.position, transform.rotation);
+        Instantiate(bulletObj, transform.position + new Vector3(0,0,-4), transform.rotation);
+        bulletObj.GetComponent<Bullet>().direction = direct;
     }
 
     void Back () {
-        Debug.Log("I go back!");
+        gameObject.GetComponent<Life>().life += 10;
+        target = transform.position + new Vector3 (-10, 0, -10);
+        agent.SetDestination(target);
+        agent.speed = speed;
 
     }
 
     void Search () {
-        Debug.Log("Searching for some players to kill...");
+        agent.SetDestination(target);
+        agent.speed = speed;
+    }
+
+    void Rotate () {
+        //Debug.Log(rightBool);
+        Vector3 right = new Vector3(0, 135, 0);
+        Vector3 left = new Vector3(0, 225, 0);
+         if (Vector3.Distance(transform.eulerAngles, to) > 0.01f)
+         {
+             transform.eulerAngles = Vector3.Lerp(transform.rotation.eulerAngles, to, Time.deltaTime);
+             
+         }
+         else
+         {
+             transform.eulerAngles = to;
+             if (rightBool){
+                 to = left;
+             } else {
+                 to = right;
+             }
+             rightBool = !rightBool;
+         }
     }
 }
